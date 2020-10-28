@@ -1,0 +1,16 @@
+[package]
+name = "reddit-linker-rs"
+version = "0.1.0"
+authors = ["Scott Callaway <github@scottcallaway.co.uk>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+tokio = { version = "0.2", features = ["macros"] }
+dotenv = "0.15.0"
+
+[dependencies.serenity]
+default-features = false
+features = ["builder", "client", "rustls_backend", "gateway", "http", "model", "utils", "cache"]
+version = "0.9.0-rc.4"
