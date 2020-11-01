@@ -1,12 +1,15 @@
+mod utils;
 use dotenv;
+use regex::Regex;
 use serenity::{
     async_trait,
     client::{bridge::gateway::GatewayIntents, Context, EventHandler},
-    model::{
-        gateway::Ready,
-        guild::{Guild, GuildStatus, Member},
-    },
+    model::{channel::Message, gateway::Ready, guild::Guild},
     Client,
+};
+use utils::{
+    get_guild_human_members, get_guild_online_members, get_num_guilds, get_text_channels,
+    get_voice_channels,
 };
 
 struct Handler;
@@ -23,16 +26,57 @@ impl EventHandler for Handler {
     }
 
     async fn guild_create(&self, ctx: Context, guild: Guild, _is_new: bool) {
+        let members = &guild
+            .members(ctx.http.clone(), Some(900), None)
+            .await
+            .expect("Could not get members.");
         println!("Connected to the {} server.", guild.name);
         println!(
-            "Server contains {} human members.",
-            get_guild_members(
-                &guild
-                    .members(ctx.http, Some(900), None)
-                    .await
-                    .expect("Could not get members")
-            )
+            "{} contains {} human members, of which {} are online.",
+            guild.name,
+            get_guild_human_members(members),
+            get_guild_online_members(&guild.members, &guild.presences)
         );
+        println!(
+            "{} contains {} text channels and {} voice channels",
+            guild.name,
+            get_text_channels(&guild.channels),
+            get_voice_channels(&guild.channels)
+        );
+    }
+
+    async fn message(&self, ctx: Context, message: Message) {
+        if message.author.bot {
+            return;
+        }
+
+        let re: Regex = Regex::new(r"^/?(r/).+").expect("Failed to initialise regex pattern");
+
+        if !re.is_match(&message.content) {
+            return;
+        }
+
+        message
+            .delete(ctx.http.clone())
+            .await
+            .expect("Couldn't delete message");
+
+        let split_message: Vec<&str> = message.content.split('/').collect();
+
+        let msg = message
+            .channel_id
+            .send_message(&ctx.http, |m| {
+                m.content(format!(
+                    "{} https://reddit.com/r/{}",
+                    message.author, split_message[1]
+                ));
+                m
+            })
+            .await;
+
+        if let Err(_why) = msg {
+            println!("Error sending message");
+        }
     }
 }
 
@@ -49,24 +93,4 @@ async fn main() {
     if let Err(why) = client.start().await {
         println!("An error occurred while running the client: {:?}", why);
     }
-}
-
-fn get_num_guilds(guilds: &Vec<GuildStatus>) -> String {
-    if guilds.len() == 1 {
-        String::from("1 guild")
-    } else {
-        format!("{:?} guilds", guilds.len())
-    }
-}
-
-fn get_guild_members(members: &Vec<Member>) -> usize {
-    let mut human_members: Vec<Member> = Vec::new();
-
-    for member in members {
-        if !member.user.bot {
-            human_members.push(member.clone());
-        }
-    }
-
-    human_members.len()
 }
