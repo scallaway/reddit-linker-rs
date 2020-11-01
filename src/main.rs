@@ -2,18 +2,40 @@ use dotenv;
 use serenity::{
     async_trait,
     client::{Context, EventHandler},
-    model::{gateway::Ready, guild::GuildStatus},
+    http,
+    model::{
+        gateway::Ready,
+        guild::{Guild, GuildStatus, Member},
+        id::UserId,
+    },
     Client,
 };
+use std::collections::HashMap;
 
 struct Handler;
 
 #[async_trait]
 impl EventHandler for Handler {
     async fn ready(&self, _: Context, ready: Ready) {
-        println!("{} is connected!", ready.user.name);
-        println!("{}", get_num_guilds(&ready.guilds));
-        println!("Members: {}", get_guild_members(&ready.guilds));
+        println!("{} is connected to the Discord Network.", ready.user.name);
+        println!(
+            "{} is part of {} servers.",
+            ready.user.name,
+            get_num_guilds(&ready.guilds)
+        );
+    }
+
+    async fn guild_create(&self, _ctx: Context, guild: Guild, _is_new: bool) {
+        println!("Connected to the {} server.", guild.name);
+        println!("total members: {}", guild.member_count);
+        println!(
+            "Server contains {} human members.",
+            get_guild_members(
+                &guild
+                    .members(&self.http)
+                    .expect("Couldn't get members from guild")
+            )
+        );
     }
 }
 
@@ -39,17 +61,15 @@ fn get_num_guilds(guilds: &Vec<GuildStatus>) -> String {
     }
 }
 
-fn get_guild_members(guilds: &Vec<GuildStatus>) -> i64 {
-    if guilds.len() == 0 {
-        -1
-    } else {
-        let guild = guilds.first().unwrap();
-
-        match *guild {
-            GuildStatus::OnlineGuild(ref guild) => guild.member_count as i64,
-            GuildStatus::OnlinePartialGuild(_) => -1,
-            GuildStatus::Offline(_) => -1,
-            _ => -1,
+fn get_guild_members(members: &HashMap<UserId, Member>) -> usize {
+    println!("Size: {}", members.len());
+    let mut human_members: Vec<Member> = Vec::new();
+    for user in members.values() {
+        println!("User: {:?}", user);
+        if !user.user.bot {
+            human_members.push(user.clone());
         }
     }
+
+    human_members.len()
 }
