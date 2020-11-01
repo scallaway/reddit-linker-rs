@@ -1,16 +1,13 @@
 use dotenv;
 use serenity::{
     async_trait,
-    client::{Context, EventHandler},
-    http,
+    client::{bridge::gateway::GatewayIntents, Context, EventHandler},
     model::{
         gateway::Ready,
         guild::{Guild, GuildStatus, Member},
-        id::UserId,
     },
     Client,
 };
-use std::collections::HashMap;
 
 struct Handler;
 
@@ -25,15 +22,15 @@ impl EventHandler for Handler {
         );
     }
 
-    async fn guild_create(&self, _ctx: Context, guild: Guild, _is_new: bool) {
+    async fn guild_create(&self, ctx: Context, guild: Guild, _is_new: bool) {
         println!("Connected to the {} server.", guild.name);
-        println!("total members: {}", guild.member_count);
         println!(
             "Server contains {} human members.",
             get_guild_members(
                 &guild
-                    .members(&self.http)
-                    .expect("Couldn't get members from guild")
+                    .members(ctx.http, Some(900), None)
+                    .await
+                    .expect("Could not get members")
             )
         );
     }
@@ -42,9 +39,10 @@ impl EventHandler for Handler {
 #[tokio::main]
 async fn main() {
     // Login with a bot token from the `.env` file
-    let token = dotenv::var("DISCORD_TOKEN").unwrap();
+    let token = dotenv::var("DISCORD_TOKEN").expect("Could not get Discord Token.");
     let mut client = Client::builder(token)
         .event_handler(Handler)
+        .intents(GatewayIntents::all())
         .await
         .expect("Could not create new client.");
 
@@ -61,13 +59,12 @@ fn get_num_guilds(guilds: &Vec<GuildStatus>) -> String {
     }
 }
 
-fn get_guild_members(members: &HashMap<UserId, Member>) -> usize {
-    println!("Size: {}", members.len());
+fn get_guild_members(members: &Vec<Member>) -> usize {
     let mut human_members: Vec<Member> = Vec::new();
-    for user in members.values() {
-        println!("User: {:?}", user);
-        if !user.user.bot {
-            human_members.push(user.clone());
+
+    for member in members {
+        if !member.user.bot {
+            human_members.push(member.clone());
         }
     }
 
