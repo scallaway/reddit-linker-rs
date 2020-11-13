@@ -1,6 +1,5 @@
 mod utils;
 use dotenv;
-use regex::Regex;
 use serenity::{
     async_trait,
     client::{bridge::gateway::GatewayIntents, Context, EventHandler},
@@ -8,9 +7,11 @@ use serenity::{
     Client,
 };
 use utils::{
-    get_guild_human_members, get_guild_online_members, get_num_guilds, get_text_channels,
-    get_voice_channels,
+    content_to_path, get_guild_human_members, get_guild_online_members, get_num_guilds,
+    get_text_channels, get_voice_channels,
 };
+
+const MEMBER_LIMIT: u64 = 900;
 
 struct Handler;
 
@@ -27,7 +28,7 @@ impl EventHandler for Handler {
 
     async fn guild_create(&self, ctx: Context, guild: Guild, _is_new: bool) {
         let members = &guild
-            .members(ctx.http.clone(), Some(900), None)
+            .members(ctx.http.clone(), Some(MEMBER_LIMIT), None)
             .await
             .expect("Could not get members.");
         println!("Connected to the {} server.", guild.name);
@@ -50,26 +51,20 @@ impl EventHandler for Handler {
             return;
         }
 
-        let re: Regex = Regex::new(r"^/?(r/).+").expect("Failed to initialise regex pattern");
-
-        if !re.is_match(&message.content) {
-            return;
-        }
+        let path = match content_to_path(&message.content) {
+            Some(path) => path,
+            None => return,
+        };
 
         message
             .delete(ctx.http.clone())
             .await
             .expect("Couldn't delete message");
 
-        let split_message: Vec<&str> = message.content.split('/').collect();
-
         let msg = message
             .channel_id
             .send_message(&ctx.http, |m| {
-                m.content(format!(
-                    "{} https://reddit.com/r/{}",
-                    message.author, split_message[1]
-                ));
+                m.content(format!("{} https://reddit.com/{}", message.author, path));
                 m
             })
             .await;
